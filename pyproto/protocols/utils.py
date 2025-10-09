@@ -1,4 +1,6 @@
 import logging
+from os import getpid
+from random import choices
 
 
 def get_logger(name: str = __name__) -> logging.Logger:
@@ -20,4 +22,50 @@ def get_logger(name: str = __name__) -> logging.Logger:
     return logger
 
 
-__all__ = ["get_logger"]
+def compute_checksum(header: bytes) -> int:
+    """
+    Checksum computation. Reference RFC 1071.
+
+    Adjacent octets to be checksummed are paired to form 16-bit
+    integers, and the 1's complement sum of these 16-bit integers is
+    formed.
+
+    For this computation the checksum field of the header should be 0.
+
+    To verify the cehcksum calculate the checksum with the actual checksum in the header.
+    The sum over all 16-bit words (including the checksum field)
+    should be 0xFFFF if the packet is correct.
+    """
+
+    # Add a one byte padding at the beginning if odd number of bytes
+    if len(header) % 2:
+        header = b"\x00" + header
+
+    checksum = 0
+    for i in range(0, len(header), 2):
+        word = (header[i] << 8) + header[i + 1]
+        checksum += word
+        checksum = (checksum & 0x0FFFF) + (checksum >> 16)
+
+    return ~checksum & 0x0FFFF
+
+
+def get_random_message(size: int) -> bytes:
+    """
+    Generate a random byte message
+    """
+    message = choices(
+        b"ABCDEFGHIJKLMNOPQRSTUWXYZ" b"abcdefghijklmnopqrstuwxyz" b"0123456789", k=size
+    )
+    return bytes(message)
+
+
+def get_identifier() -> int:
+    """
+    Generate unique 16bits identifier
+    """
+    identifier = getpid()
+    return identifier & 0xFFFF
+
+
+__all__ = ["get_logger", "compute_checksum", "get_random_message", "get_identifier"]
