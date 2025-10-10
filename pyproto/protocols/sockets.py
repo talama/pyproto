@@ -3,7 +3,7 @@ from enum import IntEnum
 from time import time
 from typing import Optional
 
-from pyproto.protocols.icmp import ICMPEcho
+from pyproto.protocols.icmp import ICMPEcho, ICMPType
 
 from .utils import get_logger
 
@@ -20,10 +20,10 @@ class ICMPSocket:
     ICMP Sockets
     """
 
-    def __init__(self, raw=True, destination: str = "127.0.0.1"):
+    def __init__(self, raw=True, dest: str = "127.0.0.1"):
         self.sock: Optional[socket.socket] = None
         self.sock_type = SockType.RAW if raw else SockType.DGRAM
-        self.destination = destination
+        self.dest = dest
         try:
             self._create_socket(self.sock_type)
         except PermissionError:
@@ -66,5 +66,35 @@ class ICMPSocket:
     def send(self, req: ICMPEcho):
         if not self.sock:
             raise OSError("No socket available.")
-        req.icmp_time = time()
-        self.sock.sendto(req.to_bytes(), (self.destination, 0))
+        self.sock.sendto(req.to_bytes(), (self.dest, 0))
+
+    def parse_reply(self, res: bytes, rtt: float):
+        data_size = len(res)
+        if data_size < 28:  # IP header length + ICMP header
+            logger.warning("Data size too small for a valid response.")
+            return None
+
+        ip_length = (res[0] & 0x0F) * 4  # IHL -> number of 32bits words
+        icmp_header = res[ip_length:]
+
+        if len(icmp_header) < 8:
+            logger.warning("Data size too small for a valid response.")
+            return None
+        res_type = icmp_header[0]
+        if res_type == ICMPType.ECHO_REPLY:
+            reply = ICMPEcho.from_bytes(icmp_header)
+            return reply
+
+    def receive(self, timeout: float = 2):
+        if not self.sock:
+            raise OSError("No socket available.")
+        start = time()
+        try:
+            self.sock.settimeout(timeout)
+            res, addr = self.sock.recvfrom(1024)
+            current_time = time()
+            rtt = (current_time - start) * 1000
+            reply = self.parse_reply(res, rtt)
+            return reply, addr, rtt
+        except OSError:
+            return None, None, None
