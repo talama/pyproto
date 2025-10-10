@@ -41,7 +41,6 @@ class ICMPEcho:
     identifier: int | None = None
     seq: int = 1
     data: bytes | None = None
-    icmp_time: float = 0
 
     def __post_init__(self):
         if self.data is None:
