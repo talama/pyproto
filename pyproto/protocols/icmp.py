@@ -318,11 +318,26 @@ class ICMPError(ICMP):
                 icmp_code, checksum = struct.unpack("!BH", raw_data[1:4])
                 icmp_code = ICMPCode(icmp_code)
                 code_msg = ""
-                match icmp_code:
-                    case ICMPCode.CODE_0:
-                        code_msg = "Time to live exceeded in transit"
-                    case ICMPCode.CODE_1:
-                        code_msg = "Fragment reassembly time exceeded."
+                if icmp_type == ICMPType.TIME_EXCEEDED:
+                    match icmp_code:
+                        case ICMPCode.CODE_0:
+                            code_msg = "Time to live exceeded in transit"
+                        case ICMPCode.CODE_1:
+                            code_msg = "Fragment reassembly time exceeded."
+                if icmp_type == ICMPType.DESTINATION_UNREACHABLE:
+                    match icmp_code:
+                        case ICMPCode.CODE_0:
+                            code_msg = "Net unreachable."
+                        case ICMPCode.CODE_1:
+                            code_msg = "Host unreachable."
+                        case ICMPCode.CODE_2:
+                            code_msg = "Protocol unreachable"
+                        case ICMPCode.CODE_3:
+                            code_msg = "Port Unreachable"
+                        case ICMPCode.CODE_4:
+                            code_msg = "Fragmentation needed."
+                        case ICMPCode.CODE_5:
+                            code_msg = "Source route failed."
                 error_obj = cls(
                     icmp_type=icmp_type, icmp_code=icmp_code, pointer=None, data=data
                 )
