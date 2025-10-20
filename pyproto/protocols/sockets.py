@@ -20,10 +20,11 @@ class ICMPSocket:
     ICMP Sockets
     """
 
-    def __init__(self, raw=True, dest: str = "127.0.0.1"):
+    def __init__(self, raw=True, dest: str = "127.0.0.1", port: int = 0):
         self.sock: Optional[socket.socket] = None
         self.sock_type = SockType.RAW if raw else SockType.DGRAM
         self.dest = dest
+        self.port = port
         try:
             self._create_socket(self.sock_type)
         except PermissionError:
@@ -66,7 +67,7 @@ class ICMPSocket:
     def send(self, req: ICMPEcho):
         if not self.sock:
             raise OSError("No socket available.")
-        self.sock.sendto(req.to_bytes(), (self.dest, 0))
+        self.sock.sendto(req.to_bytes(), (self.dest, self.port))
 
     def parse_reply(self, res: bytes):
         data_size = len(res)
@@ -89,7 +90,7 @@ class ICMPSocket:
             logger.warning("Failed to parse ICMP reply: %s", e)
             return None
 
-    def receive(self, timeout: float = 2):
+    def receive(self, timeout: float = 8):
         if not self.sock:
             raise OSError("No socket available.")
         try:
@@ -101,7 +102,6 @@ class ICMPSocket:
             reply = self.parse_reply(res)
             return reply, addr, rtt
         except socket.timeout:
-            logger.error("Timeout error trying to reach %s.", self.dest)
             return None, None, None
         except OSError:
             return None, None, None
