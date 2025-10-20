@@ -1,7 +1,8 @@
 import struct
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from enum import IntEnum
-from time import time
+from typing import Self
 
 from .utils import compute_checksum, get_identifier, get_logger, get_random_message
 
@@ -39,13 +40,71 @@ class ICMPCode(IntEnum):
 
 
 @dataclass
-class ICMPEcho:
+class ICMP(ABC):
+    """
+    ICMP base abstract class.
+    """
+
+    icmp_type: ICMPType
+    icmp_code: ICMPCode
+
+    def __post_init__(self):
+        self.checksum = self.compute_checksum(self._pack_for_checksum())
+
+    @abstractmethod
+    def _pack_for_checksum(self, chk=False) -> bytes:
+        """
+        Must be implemented by subclasses.
+        Return bytes for checksum computation including all header fields + payload.
+        If chk is True include checksum in the computation.
+        If chk is False checksum is set to 0 in the computation.
+        """
+        pass
+
+    def compute_checksum(self, header: bytes) -> int:
+        """
+        Checksum computation. Reference RFC 1071.
+        """
+        if len(header) % 2:
+            header = b"\x00" + header
+
+        checksum = 0
+        for i in range(0, len(header), 2):
+            word = (header[i] << 8) + header[i + 1]
+            checksum += word
+            checksum = (checksum & 0x0FFFF) + (checksum >> 16)
+
+        return ~checksum & 0x0FFFF
+
+    def verify_checksum(self):
+        checksum = self.compute_checksum(self._pack_for_checksum(chk=True))
+        return checksum == 0x0FFFF
+
+    @abstractmethod
+    def to_bytes(self) -> bytes:
+        """
+        Must be implemented by subclasses.
+        Return raw ICMP packet (header + payload)
+        """
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_bytes(cls, raw_data: bytes) -> Self | None:
+        """
+        Must be implemented by subclasses.
+        Creates a ICMP object from raw ICMP packet
+        """
+        pass
+
+
+@dataclass
+class ICMPEcho(ICMP):
     """
     ICMP Echo Request / Reply
     """
 
-    type: ICMPType
-    code: ICMPCode = ICMPCode.CODE_0
+    icmp_code: ICMPCode = field(default=ICMPCode.CODE_0)
     identifier: int | None = None
     seq: int = 1
     data: bytes | None = None
@@ -71,7 +130,7 @@ class ICMPEcho:
 
     def __repr__(self):
         return (
-            f"ICMPEcho(type={self.type.name}, code={self.code}, checksum={self.checksum}, "
+            f"ICMPEcho(type={self.icmp_type.name}, code={self.icmp_code}, checksum={self.checksum}, "
             f"id={self.identifier}, seq={self.seq}, data_len={len(self.data) if self.data else 0})"
         )
 
@@ -86,8 +145,8 @@ class ICMPEcho:
         return (
             struct.pack(
                 "!BBHHH",
-                int(self.type),
-                int(self.code),
+                int(self.icmp_type),
+                int(self.icmp_code),
                 checksum,
                 self.identifier,
                 self.seq,
@@ -104,8 +163,8 @@ class ICMPEcho:
         return (
             struct.pack(
                 "!BBHHH",
-                int(self.type),
-                int(self.code),
+                int(self.icmp_type),
+                int(self.icmp_code),
                 self.checksum,
                 self.identifier,
                 self.seq,
@@ -113,16 +172,8 @@ class ICMPEcho:
             + self.data
         )
 
-    def verify_checksum(self):
-        """
-        Verify the packet checksum
-        """
-        header_bytes = self._pack_for_checksum(chk=True)
-        checksum = compute_checksum(header_bytes)
-        return checksum == 0xFFFF
-
     @classmethod
-    def from_bytes(cls, raw_data):
+    def from_bytes(cls, raw_data: bytes) -> Self | None:
         """
         Cretates a ICMPEcho obj from a raw packet in bytes.
         """
@@ -141,20 +192,24 @@ class ICMPEcho:
             return None
 
         try:
-            echo_type, code, checksum, identifier, seq = struct.unpack(
+            icmp_type, code, checksum, identifier, seq = struct.unpack(
                 "!BBHHH", raw_data[:8]
             )
             data = raw_data[8:]
 
-            echo_type = ICMPType(echo_type)
-            if echo_type not in (ICMPType.ECHO_REQUEST, ICMPType.ECHO_REPLY):
-                raise ValueError(f"Invalid ICMP type: {echo_type}")
-            code = ICMPCode(code)
-            if code != ICMPCode.CODE_0:
-                logger.warning("Invalid ICMP code: %d. Using 0 instead", code)
-                code = ICMPCode.CODE_0
+            icmp_type = ICMPType(icmp_type)
+            if icmp_type not in (ICMPType.ECHO_REQUEST, ICMPType.ECHO_REPLY):
+                raise ValueError(f"Invalid ICMP type: {icmp_type}")
+            icmp_code = ICMPCode(code)
+            if icmp_code != ICMPCode.CODE_0:
+                logger.warning("Invalid ICMP code: %d. Using 0 instead", icmp_code)
+                icmp_code = ICMPCode.CODE_0
             icmp_obj = cls(
-                type=echo_type, code=code, identifier=identifier, seq=seq, data=data
+                icmp_type=icmp_type,
+                icmp_code=icmp_code,
+                identifier=identifier,
+                seq=seq,
+                data=data,
             )
             if icmp_obj.checksum != checksum:
                 raise ValueError("Computed checksum doesn't match.")
