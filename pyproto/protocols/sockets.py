@@ -89,20 +89,19 @@ class ICMPSocket:
             logger.warning("Failed to parse ICMP reply: %s", e)
             return None
 
-    def receive(self, timeout: float = 5):
+    def receive(self, timeout: float = 2):
         if not self.sock:
             raise OSError("No socket available.")
-        start = time()
         try:
             self.sock.settimeout(timeout)
+            start = time()
             res, addr = self.sock.recvfrom(1024)
-
             current_time = time()
             rtt = (current_time - start) * 1000
             reply = self.parse_reply(res)
             return reply, addr, rtt
         except socket.timeout:
-            print("Timeout error.")
+            logger.error("Timeout error trying to reach %s.", self.dest)
             return None, None, None
         except OSError:
             return None, None, None
