@@ -80,13 +80,11 @@ class ICMP(ABC):
         checksum = self.compute_checksum(self._pack_for_checksum(chk=True))
         return checksum == 0x0FFFF
 
-    @abstractmethod
     def to_bytes(self) -> bytes:
         """
-        Must be implemented by subclasses.
         Return raw ICMP packet (header + payload)
         """
-        pass
+        return self._pack_for_checksum(chk=True)
 
     @classmethod
     @abstractmethod
@@ -154,24 +152,6 @@ class ICMPEcho(ICMP):
             + self.data
         )
 
-    def to_bytes(self) -> bytes:
-        """
-        Return raw ICMP packet (header + payload)
-        """
-        assert self.data is not None
-
-        return (
-            struct.pack(
-                "!BBHHH",
-                int(self.icmp_type),
-                int(self.icmp_code),
-                self.checksum,
-                self.identifier,
-                self.seq,
-            )
-            + self.data
-        )
-
     @classmethod
     def from_bytes(cls, raw_data: bytes) -> Self | None:
         """
@@ -218,3 +198,123 @@ class ICMPEcho(ICMP):
             return None
 
         return icmp_obj
+
+
+# Destination Unreachable Message
+#
+#     0                   1                   2                   3
+#     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |     Type      |     Code      |          Checksum             |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |                             unused                            |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |      Internet Header + 64 bits of Original Data Datagram      |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+# Time Exceeded Message
+#
+#     0                   1                   2                   3
+#     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |     Type      |     Code      |          Checksum             |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |                             unused                            |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |      Internet Header + 64 bits of Original Data Datagram      |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+# Parameter Problem Message
+#
+#     0                   1                   2                   3
+#     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |     Type      |     Code      |          Checksum             |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |    Pointer    |                   unused                      |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#    |      Internet Header + 64 bits of Original Data Datagram      |
+#    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+@dataclass
+class ICMPError(ICMP):
+    """
+    ICMP Destination Unreachable
+    ICMP Time Exceeded
+    ICMP Parameter Problem
+    """
+
+    data: bytes
+    pointer: int | None = None
+
+    def __repr__(self) -> str:
+        return f"ICMPEcho(type={self.icmp_type.name}, code={self.icmp_code}, checksum={self.checksum}, pointer={self.pointer}, data_len={len(self.data)})"
+
+    def _pack_for_checksum(self, chk: bool = False) -> bytes:
+        """
+        Pack header fields in bytes for checksum computation.
+        Checksum set to 0 by default.
+        If chk == True the computation use the packet checksum value instead.
+        """
+
+        checksum = self.checksum if chk else 0
+        if self.icmp_type == ICMPType.PARAMETER_PROBLEM:
+            return (
+                struct.pack(
+                    "!BBHB3x",
+                    int(self.icmp_type),
+                    int(self.icmp_code),
+                    checksum,
+                    self.pointer,
+                    0,
+                )
+                + self.data
+            )
+        return (
+            struct.pack(
+                "!BBH4x", int(self.icmp_type), int(self.icmp_code), self.checksum, 0
+            )
+            + self.data
+        )
+
+    @classmethod
+    def from_bytes(cls, raw_data: bytes) -> Self | None:
+        """
+        Cretates a ICMPError obj from a raw packet in bytes.
+        """
+        data_size = len(raw_data)
+        if data_size > 65508:
+            logger.error(
+                "Packet size too large: %d bytes. Maximum payload size allowed is 65500 bytes",
+                data_size,
+            )
+            return None
+
+        if data_size <= 8:
+            logger.error(
+                "Packet size of %d bytes is too small to be valid ICMP", data_size
+            )
+            return None
+        try:
+            icmp_type = ICMPType(raw_data[0])
+            data = raw_data[8:]
+            error_obj = None
+            if icmp_type == ICMPType.PARAMETER_PROBLEM:
+                icmp_code, checksum, pointer = struct.unpack("!BBHB", raw_data[1:5])
+                icmp_code = ICMPCode(icmp_code)
+                error_obj = cls(
+                    icmp_type=icmp_type, icmp_code=icmp_code, pointer=pointer, data=data
+                )
+            else:
+                icmp_code, checksum = struct.unpack("!BBH", raw_data[1:4])
+                error_obj = cls(
+                    icmp_type=icmp_type, icmp_code=icmp_code, pointer=None, data=data
+                )
+            if error_obj.checksum != checksum:
+                raise ValueError("Computed checksum doesn't match.")
+            return error_obj
+
+        except (ValueError, struct.error) as e:
+            logger.error("Failed to parse ICMP packet: %s", e)
+            return None
