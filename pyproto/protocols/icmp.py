@@ -11,10 +11,18 @@ logger = get_logger("ICMPEcho")
 class ICMPType(IntEnum):
     ECHO_REQUEST = 8
     ECHO_REPLY = 0
+    DESTINATION_UNREACHABLE = 3
+    TIME_EXCEEDED = 11
+    PARAMETER_PROBLEM = 12
 
 
 class ICMPCode(IntEnum):
     CODE_0 = 0
+    CODE_1 = 1
+    CODE_2 = 2
+    CODE_3 = 3
+    CODE_4 = 4
+    CODE_5 = 5
 
 
 # Echo or Echo Reply Message
