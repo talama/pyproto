@@ -6,7 +6,7 @@ from typing import Self
 
 from .utils import compute_checksum, get_identifier, get_logger, get_random_message
 
-logger = get_logger("ICMPEcho")
+logger = get_logger("ICMP")
 
 
 class ICMPType(IntEnum):
@@ -123,8 +123,7 @@ class ICMPEcho(ICMP):
                 "Sequence number must be 0-65535, got %d. Using 1 instead", self.seq
             )
             self.seq = 1
-
-        self.checksum = compute_checksum(self._pack_for_checksum())
+        self.checksum = self.compute_checksum(self._pack_for_checksum())
 
     def __repr__(self):
         return (
@@ -194,7 +193,7 @@ class ICMPEcho(ICMP):
             if icmp_obj.checksum != checksum:
                 raise ValueError("Computed checksum doesn't match.")
         except (ValueError, struct.error) as e:
-            logger.error("Failed to parse ICMP packet: %s", e)
+            logger.error("Failed to parse ICMP packet in ICMPEcho: %s", e)
             return None
 
         return icmp_obj
@@ -248,8 +247,15 @@ class ICMPError(ICMP):
     data: bytes
     pointer: int | None = None
 
+    def __post_init__(self):
+        self.checksum = self.compute_checksum(self._pack_for_checksum())
+        self.code_msg: str | None = None
+
     def __repr__(self) -> str:
-        return f"ICMPEcho(type={self.icmp_type.name}, code={self.icmp_code}, checksum={self.checksum}, pointer={self.pointer}, data_len={len(self.data)})"
+        msg = self.code_msg if self.code_msg is not None else self.icmp_code
+        if self.pointer is None:
+            return f"ICMPError(type={self.icmp_type.name}, code={msg}, checksum={self.checksum}, data_len={len(self.data)})"
+        return f"ICMPError(type={self.icmp_type.name}, code={msg}, checksum={self.checksum}, pointer={self.pointer}, data_len={len(self.data)})"
 
     def _pack_for_checksum(self, chk: bool = False) -> bytes:
         """
@@ -267,13 +273,15 @@ class ICMPError(ICMP):
                     int(self.icmp_code),
                     checksum,
                     self.pointer,
-                    0,
                 )
                 + self.data
             )
         return (
             struct.pack(
-                "!BBH4x", int(self.icmp_type), int(self.icmp_code), self.checksum, 0
+                "!BBH4x",
+                int(self.icmp_type),
+                int(self.icmp_code),
+                checksum,
             )
             + self.data
         )
@@ -301,20 +309,28 @@ class ICMPError(ICMP):
             data = raw_data[8:]
             error_obj = None
             if icmp_type == ICMPType.PARAMETER_PROBLEM:
-                icmp_code, checksum, pointer = struct.unpack("!BBHB", raw_data[1:5])
+                icmp_code, checksum, pointer = struct.unpack("!BHB", raw_data[1:5])
                 icmp_code = ICMPCode(icmp_code)
                 error_obj = cls(
                     icmp_type=icmp_type, icmp_code=icmp_code, pointer=pointer, data=data
                 )
             else:
-                icmp_code, checksum = struct.unpack("!BBH", raw_data[1:4])
+                icmp_code, checksum = struct.unpack("!BH", raw_data[1:4])
+                icmp_code = ICMPCode(icmp_code)
+                code_msg = ""
+                match icmp_code:
+                    case ICMPCode.CODE_0:
+                        code_msg = "Time to live exceeded in transit"
+                    case ICMPCode.CODE_1:
+                        code_msg = "Fragment reassembly time exceeded."
                 error_obj = cls(
                     icmp_type=icmp_type, icmp_code=icmp_code, pointer=None, data=data
                 )
+                error_obj.code_msg = code_msg
             if error_obj.checksum != checksum:
                 raise ValueError("Computed checksum doesn't match.")
             return error_obj
 
         except (ValueError, struct.error) as e:
-            logger.error("Failed to parse ICMP packet: %s", e)
+            logger.error("Failed to parse ICMP packet in ICMPError: %s", e)
             return None
