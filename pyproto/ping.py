@@ -8,7 +8,9 @@ from pyproto.protocols.utils import get_logger
 logger = get_logger("Ping")
 
 
-def ping(dest: str, port: int = 0, count=4, interval=1, timeout=2, ttl=64):
+def ping(
+    dest: str, port: int = 0, count=4, interval=1, timeout=2, ttl=64, output=False
+):
     """
     Simple ping implementation.
     Send icmp Echo request packets to a network host
@@ -22,14 +24,13 @@ def ping(dest: str, port: int = 0, count=4, interval=1, timeout=2, ttl=64):
 
     print(f"PING {dest}")
 
-    with ICMPSocket(dest=dest, port=port) as s:
-        s.set_ttl(ttl)
+    with ICMPSocket(dest=dest, port=port, ttl=ttl) as s:
         for seq in range(count):
-            if seq > 0:
-                sleep(interval)
-
-            req = ICMPEcho(icmp_type=ICMPType.ECHO_REQUEST, seq=seq)
             try:
+                if seq > 0:
+                    sleep(interval)
+
+                req = ICMPEcho(icmp_type=ICMPType.ECHO_REQUEST, seq=seq)
                 s.send(req)
                 pkt_sent += 1
 
@@ -43,18 +44,32 @@ def ping(dest: str, port: int = 0, count=4, interval=1, timeout=2, ttl=64):
                         assert rtt is not None
                         pkt_recv += 1
                         rtts.append(rtt)
-                        print(
-                            f"{len(res.data)} from {dest}: icmp_seq={seq} time={rtt:.2f} ms"
-                        )
+                        if output:
+                            print(
+                                f"{len(res.data)} bytes from {dest}: icmp_seq={seq} time={rtt:.2f} ms"
+                            )
                     case t if t in (
                         ICMPType.TIME_EXCEEDED,
                         ICMPType.DESTINATION_UNREACHABLE,
                     ):
                         assert isinstance(res, ICMPError)
                         pkt_lost += 1
-                        print(
-                            f"From {addr[0] if addr else '()'} icmp_seq={seq} {res.code_msg}"
-                        )
-
+                        if output:
+                            print(
+                                f"From {addr[0] if addr else '()'} icmp_seq={seq} {res.code_msg}"
+                            )
+            except KeyboardInterrupt:
+                return {
+                    "sent": pkt_sent,
+                    "recv": pkt_recv,
+                    "lost": pkt_lost,
+                    "rtts": rtts,
+                }
             except OSError:
                 logger.error("Failed to send icmp echo message")
+        return {
+            "sent": pkt_sent,
+            "recv": pkt_recv,
+            "lost": pkt_lost,
+            "rtts": rtts,
+        }
