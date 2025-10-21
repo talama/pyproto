@@ -32,6 +32,7 @@ class ICMPSocket:
             logger.warning(
                 "You need admin privileges to use raw sockets. Running as SOCK_DGRAM."
             )
+            self.sock_type = SockType.DGRAM
             self._create_socket(sock_type=SockType.DGRAM)
 
     def __enter__(self):
@@ -61,16 +62,26 @@ class ICMPSocket:
             self.sock = None
 
     def _create_socket(self, sock_type: SockType):
+        if self.sock_type == SockType.DGRAM:
+            logger.warning("ICMP DGRAM sockets only support Echo Request/Reply")
+            logger.warning("Other ICMP types will not be sent or received.")
         self.sock = socket.socket(
             family=socket.AF_INET, type=sock_type, proto=socket.IPPROTO_ICMP
         )
-        self.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, self.ttl)
+        try:
+            if self.sock_type == SockType.RAW:
+                self.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, self.ttl)
+        except OSError as e:
+            logger.error("Failed to set ttl: %s", e)
 
     def set_ttl(self, ttl):
         if not self.sock:
             raise OSError("No socket available.")
-        self.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
-        self.ttl = ttl
+        try:
+            self.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
+            self.ttl = ttl
+        except OSError as e:
+            logger.error("Error setting socket ttl: %s", e)
 
     def send(self, req: ICMPEcho):
         if not self.sock:
