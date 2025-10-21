@@ -8,7 +8,7 @@ from pyproto.protocols.utils import get_logger
 logger = get_logger("Ping")
 
 
-def ping(dest: str, port: int = 0, count=4, interval=1, timeout=2):
+def ping(dest: str, port: int = 0, count=4, interval=1, timeout=2, ttl=64):
     """
     Simple ping implementation.
     Send icmp Echo request packets to a network host
@@ -23,6 +23,7 @@ def ping(dest: str, port: int = 0, count=4, interval=1, timeout=2):
     print(f"PING {dest}")
 
     with ICMPSocket(dest=dest, port=port) as s:
+        s.set_ttl(ttl)
         for seq in range(count):
             if seq > 0:
                 sleep(interval)

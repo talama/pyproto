@@ -20,11 +20,12 @@ class ICMPSocket:
     ICMP Sockets
     """
 
-    def __init__(self, raw=True, dest: str = "127.0.0.1", port: int = 0):
+    def __init__(self, raw=True, dest: str = "127.0.0.1", port: int = 0, ttl: int = 64):
         self.sock: Optional[socket.socket] = None
         self.sock_type = SockType.RAW if raw else SockType.DGRAM
         self.dest = dest
         self.port = port
+        self.ttl = ttl
         try:
             self._create_socket(self.sock_type)
         except PermissionError:
@@ -63,6 +64,13 @@ class ICMPSocket:
         self.sock = socket.socket(
             family=socket.AF_INET, type=sock_type, proto=socket.IPPROTO_ICMP
         )
+        self.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, self.ttl)
+
+    def set_ttl(self, ttl):
+        if not self.sock:
+            raise OSError("No socket available.")
+        self.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
+        self.ttl = ttl
 
     def send(self, req: ICMPEcho):
         if not self.sock:
@@ -90,7 +98,7 @@ class ICMPSocket:
             logger.warning("Failed to parse ICMP reply: %s", e)
             return None
 
-    def receive(self, timeout: float = 8):
+    def receive(self, timeout: float = 2):
         if not self.sock:
             raise OSError("No socket available.")
         try:
