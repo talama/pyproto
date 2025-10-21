@@ -6,7 +6,6 @@ from random import choices
 def get_logger(name: str = __name__) -> logging.Logger:
     """Create a custom logger by name"""
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
 
     # Avoid adding multiple handlers if logger is requested multiple times
     if not logger.handlers:
@@ -18,8 +17,20 @@ def get_logger(name: str = __name__) -> logging.Logger:
         )
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
-
+    logger.propagate = True
     return logger
+
+
+def set_log_level(level: int):
+    """
+    Set the logging level for all pyproto loggers.
+
+    Usage example:
+    import logging
+    from pyproto import set_log_level
+    set_log_level(logging.ERROR)
+    """
+    logging.basicConfig(level=level)
 
 
 def compute_checksum(header: bytes) -> int:
@@ -66,6 +77,3 @@ def get_identifier() -> int:
     """
     identifier = getpid()
     return identifier & 0xFFFF
-
-
-__all__ = ["get_logger", "compute_checksum", "get_random_message", "get_identifier"]
