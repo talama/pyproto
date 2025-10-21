@@ -21,8 +21,8 @@ pkt = ICMPEcho(ICMPType.ECHO_REQUEST)
 #         print(f"Received {reply} from {addr} in time={rtt:.2f}ms")
 
 with ICMPSocket(dest="8.8.8.8") as s:
-    if s.sock is not None:
-        s.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, 1)
+    # if s.sock is not None:
+    #     s.sock.setsockopt(socket.SOL_IP, socket.IP_TTL, 3)
     s.send(pkt)
     reply, addr, rtt = s.receive()
     if reply is None:
