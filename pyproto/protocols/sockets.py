@@ -109,7 +109,7 @@ class ICMPSocket:
             logger.warning("Failed to parse ICMP reply: %s", e)
             return None
 
-    def receive(self, timeout: float = 2):
+    def receive(self, timeout: float = 1):
         if not self.sock:
             raise OSError("No socket available.")
         try:
