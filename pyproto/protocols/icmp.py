@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Self
 
-from .utils import compute_checksum, get_identifier, get_logger, get_random_message
+from .utils import get_identifier, get_logger, get_random_message
 
 logger = get_logger("ICMP")
 
