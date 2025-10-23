@@ -8,6 +8,11 @@ Currently implemented ICMP Echo Request/Reply and ICMP Destination Unreachable /
 
 - ### Ping Example
 
+  Raw sockets require admin privileges to avoid malicious use.
+
+  If run without admin privileges pyproto sockets will defalut to DGRAM sockets.
+  ICMP over DGRAM sockets support only a limited sets of options.
+
   ```python
   from pyproto import ping
 
