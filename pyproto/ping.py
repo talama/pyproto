@@ -2,7 +2,9 @@ from dataclasses import dataclass, field
 from time import sleep
 from typing import List, Optional
 
-from pyproto import ICMPEcho, ICMPError, ICMPSocket, ICMPType, get_logger
+from .protocols.icmp import ICMPEcho, ICMPError, ICMPType
+from .protocols.sockets import ICMPSocket
+from .protocols.utils import get_logger
 
 logger = get_logger("Ping")
 
