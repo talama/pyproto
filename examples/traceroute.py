@@ -1,4 +1,4 @@
 from pyproto import traceroute
 
 if __name__ == "__main__":
-    print(traceroute(dest="8.8.8.8", count=2))
+    hops = traceroute(dest="8.8.8.8", attempts=2, output=True)
