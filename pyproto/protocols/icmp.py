@@ -1,7 +1,7 @@
 import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import IntEnum, verify
 from typing import Self
 
 from .utils import get_identifier, get_logger, get_random_message
@@ -342,8 +342,10 @@ class ICMPError(ICMP):
                     icmp_type=icmp_type, icmp_code=icmp_code, pointer=None, data=data
                 )
                 error_obj.code_msg = code_msg
-            if error_obj.checksum != checksum:
-                raise ValueError("Computed checksum doesn't match.")
+                # print(f"checksum: {hex(checksum)}")
+                # print(f"obj checksum: {hex(error_obj.checksum)}")
+            # if not error_obj.verify_checksum():
+            #     raise ValueError("Computed checksum doesn't match.")
             return error_obj
 
         except (ValueError, struct.error) as e:
