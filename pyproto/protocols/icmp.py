@@ -49,7 +49,7 @@ class ICMP(ABC):
     icmp_code: ICMPCode
 
     def __post_init__(self):
-        self.checksum = self.compute_checksum(self._pack_for_checksum())
+        pass
 
     @abstractmethod
     def _pack_for_checksum(self, chk=False) -> bytes:
