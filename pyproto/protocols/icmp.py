@@ -78,7 +78,7 @@ class ICMP(ABC):
 
     def verify_checksum(self):
         checksum = self.compute_checksum(self._pack_for_checksum(chk=True))
-        return checksum == 0x0FFFF
+        return checksum == 0
 
     def to_bytes(self) -> bytes:
         """
@@ -191,7 +191,7 @@ class ICMPEcho(ICMP):
                 data=data,
             )
             if icmp_obj.checksum != checksum:
-                raise ValueError("Computed checksum doesn't match.")
+                raise ValueError("Computed checksum doesn't match raw packet checksum.")
         except (ValueError, struct.error) as e:
             logger.error("Failed to parse ICMP packet in ICMPEcho: %s", e)
             return None
@@ -266,23 +266,27 @@ class ICMPError(ICMP):
 
         checksum = self.checksum if chk else 0
         if self.icmp_type == ICMPType.PARAMETER_PROBLEM:
+            unused = b"\x00\x00\x00"
             return (
                 struct.pack(
-                    "!BBHB3x",
+                    "!BBHB",
                     int(self.icmp_type),
                     int(self.icmp_code),
                     checksum,
-                    self.pointer,
+                    self.pointer or 0,
                 )
+                + unused
                 + self.data
             )
+        unused = b"\x00\x00\x00\x00"
         return (
             struct.pack(
-                "!BBH4x",
+                "!BBH",
                 int(self.icmp_type),
                 int(self.icmp_code),
                 checksum,
             )
+            + unused
             + self.data
         )
 
@@ -306,10 +310,10 @@ class ICMPError(ICMP):
             return None
         try:
             icmp_type = ICMPType(raw_data[0])
-            data = raw_data[8:]
             error_obj = None
             if icmp_type == ICMPType.PARAMETER_PROBLEM:
                 icmp_code, checksum, pointer = struct.unpack("!BHB", raw_data[1:5])
+                data = raw_data[5:]  # 3 butes of unused padding + payload
                 icmp_code = ICMPCode(icmp_code)
                 error_obj = cls(
                     icmp_type=icmp_type, icmp_code=icmp_code, pointer=pointer, data=data
@@ -338,14 +342,14 @@ class ICMPError(ICMP):
                             code_msg = "Fragmentation needed."
                         case ICMPCode.CODE_5:
                             code_msg = "Source route failed."
+
+                data = raw_data[4:]  # 4 bytes of unused padding + payload
                 error_obj = cls(
                     icmp_type=icmp_type, icmp_code=icmp_code, pointer=None, data=data
                 )
                 error_obj.code_msg = code_msg
-                # print(f"checksum: {hex(checksum)}")
-                # print(f"obj checksum: {hex(error_obj.checksum)}")
-            # if not error_obj.verify_checksum():
-            #     raise ValueError("Computed checksum doesn't match.")
+            if error_obj.checksum != checksum:
+                raise ValueError("Computed checksum doesn't match raw packet checksum.")
             return error_obj
 
         except (ValueError, struct.error) as e:
