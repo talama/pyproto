@@ -1,8 +1,26 @@
+from dataclasses import dataclass, field
+from typing import List, Optional
+
 from .protocols.icmp import ICMPCode, ICMPEcho, ICMPType
 from .protocols.sockets import ICMPSocket
 from .protocols.utils import get_logger
 
 logger = get_logger("traceroute")
+
+
+@dataclass
+class Probe:
+    seq: int
+    addr: Optional[str]
+    rtt: Optional[float]
+    icmp_type: Optional[ICMPType] = None
+    icmp_code: Optional[ICMPCode] = None
+
+
+@dataclass
+class Hop:
+    hop: int
+    probes: List[Probe] = field(default_factory=list)
 
 
 def traceroute(
@@ -16,7 +34,7 @@ def traceroute(
 ):
     reached = False
     current_ttl = hop_start
-    hops = []
+    hops = List[Hop]
 
     while not reached and current_ttl <= max_hops:
         current_hop = {"addr": "*", "rtts": []}
