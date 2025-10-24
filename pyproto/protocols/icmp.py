@@ -1,7 +1,7 @@
 import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum, verify
+from enum import IntEnum
 from typing import Self
 
 from .utils import get_identifier, get_logger, get_random_message
@@ -61,7 +61,8 @@ class ICMP(ABC):
         """
         pass
 
-    def compute_checksum(self, header: bytes) -> int:
+    @staticmethod
+    def compute_checksum(header: bytes) -> int:
         """
         Checksum computation. Reference RFC 1071.
         """
@@ -191,7 +192,11 @@ class ICMPEcho(ICMP):
                 data=data,
             )
             if icmp_obj.checksum != checksum:
-                raise ValueError("Computed checksum doesn't match raw packet checksum.")
+                logger.warning(
+                    "Checksum mismatch (computed=%#04x, raw=%#04x)",
+                    icmp_obj.checksum,
+                    checksum,
+                )
         except (ValueError, struct.error) as e:
             logger.error("Failed to parse ICMP packet in ICMPEcho: %s", e)
             return None
@@ -266,27 +271,23 @@ class ICMPError(ICMP):
 
         checksum = self.checksum if chk else 0
         if self.icmp_type == ICMPType.PARAMETER_PROBLEM:
-            unused = b"\x00\x00\x00"
             return (
                 struct.pack(
-                    "!BBHB",
+                    "!BBHB3x",
                     int(self.icmp_type),
                     int(self.icmp_code),
                     checksum,
                     self.pointer or 0,
                 )
-                + unused
                 + self.data
             )
-        unused = b"\x00\x00\x00\x00"
         return (
             struct.pack(
-                "!BBH",
+                "!BBH4x",
                 int(self.icmp_type),
                 int(self.icmp_code),
                 checksum,
             )
-            + unused
             + self.data
         )
 
@@ -349,7 +350,11 @@ class ICMPError(ICMP):
                 )
                 error_obj.code_msg = code_msg
             if error_obj.checksum != checksum:
-                raise ValueError("Computed checksum doesn't match raw packet checksum.")
+                logger.warning(
+                    "Checksum mismatch (computed=%#04x, raw=%#04x)",
+                    error_obj.checksum,
+                    checksum,
+                )
             return error_obj
 
         except (ValueError, struct.error) as e:
