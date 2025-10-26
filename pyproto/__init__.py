@@ -1,5 +1,4 @@
-from .ping import ping
-from .traceroute import traceroute
+from .ping import PingPacket, PingResult, ping
 from .protocols.icmp import ICMPCode, ICMPEcho, ICMPError, ICMPType
 from .protocols.sockets import ICMPSocket
 from .protocols.utils import (
@@ -8,10 +7,16 @@ from .protocols.utils import (
     get_random_message,
     set_log_level,
 )
+from .traceroute import Hop, Probe, TracerouteResult, traceroute
 
 __all__ = [
     "ping",
+    "PingPacket",
+    "PingResult",
     "traceroute",
+    "Hop",
+    "Probe",
+    "TracerouteResult",
     "ICMPCode",
     "ICMPEcho",
     "ICMPError",
