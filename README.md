@@ -47,6 +47,64 @@ Currently implemented ICMP Echo Request/Reply and ICMP Destination Unreachable /
   PingPacket(icmp_type='ECHO_REPLY', icmp_code='CODE_0', seq=3, rtt=9.312629699707031, success=True)
   ```
 
+- ### Traceroute example
+
+  Traceroute must be run with admin privileges because it relies on raw socket functionalities.
+
+  Example using the default output.
+
+  ```python
+  from pyproto import traceroute
+
+  if __name__ == "__main__":
+      traceroute(dest="8.8.8.8", output=True)
+  ```
+
+  ```bash
+  ❯ sudo uv run -m examples.traceroute
+  traceroute to 8.8.8.8, 30 hops max, 60 byte packets
+   1  192.168.1.1  0.30ms 0.22ms 0.26ms
+   2  *   *  *  *
+   3  172.18.9.48  4.48ms 4.38ms 4.30ms
+   4  172.18.8.222  5.11ms 4.72ms 4.79ms
+   5  172.19.184.6  7.07ms 7.27ms 6.58ms
+   6  172.19.177.26  8.97ms 8.26ms 8.65ms
+   7  195.22.192.144  10.73ms 10.75ms 10.85ms
+   8  72.14.204.72  8.80ms 8.92ms 8.24ms
+   9  108.170.255.203  10.27ms 10.37ms 10.28ms
+  10  108.170.233.57  8.96ms 8.77ms 9.07ms
+  11  8.8.8.8  9.06ms 9.34ms 9.39ms
+  ```
+
+  Example with custom output:
+
+  ```python
+  from pyproto import traceroute
+
+  if __name__ == "__main__":
+      result = traceroute(dest="8.8.8.8")
+
+      print(f"traceroute to {result.dest}")
+      for hop in result.hops:
+          print(hop.print_to_line())
+  ```
+
+  ```bash
+  ❯ sudo uv run -m examples.traceroute
+  traceroute to 8.8.8.8
+    1 192.168.1.1  0.34ms 0.24ms 0.23ms
+    2 *  *  *  *
+    3 172.18.9.48  13.08ms 4.52ms 4.22ms
+    4 172.18.8.222  6.07ms 4.80ms 4.87ms
+    5 172.19.184.6  7.00ms 7.30ms 7.28ms
+    6 172.19.177.26  8.68ms 8.79ms 8.95ms
+    7 195.22.192.144  10.68ms 10.80ms 10.75ms
+    8 72.14.204.72  9.00ms 8.72ms 12.62ms
+    9 108.170.255.203  9.94ms 9.35ms 9.52ms
+   10 108.170.233.57  8.75ms 8.83ms 8.84ms
+   11 8.8.8.8  8.82ms 12.25ms 9.33ms
+  ```
+
 - ### ICMPEcho / ICMPError / ICMPTYPE / ICMPCode
 
   ```python
