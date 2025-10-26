@@ -21,7 +21,7 @@ class Probe:
 
 @dataclass
 class Hop:
-    hop: int
+    num: int
     probes: List[Probe] = field(default_factory=list)
 
     @property
@@ -40,14 +40,19 @@ class Hop:
         for p in self.probes:
             if p.addr:
                 res[p.addr].append(p.rtt)
+            else:
+                res["*"].append(None)
         return res
 
-    def print_to_line(self):
+    def to_line(self):
         out = ""
         for addr, rtts in self.address_rtts.items():
-            out += f" {addr}"
+            out += f" {self.num:2d}  {addr} "
             for rtt in rtts:
-                out += f" {rtt:.2f}ms" if rtt is not None else " *"
+                if rtt is None:
+                    out += " * "
+                else:
+                    out += f" {rtt:.2f}ms"
         return out
 
 
@@ -60,10 +65,11 @@ class TracerouteResult:
 def traceroute(
     dest: str,
     attempts=3,
-    interval=0.5,
+    interval=0.05,
     timeout=1,
     hop_start=1,
     max_hops=30,
+    packet_size=60,
     output=False,
 ):
     reached = False
@@ -71,6 +77,8 @@ def traceroute(
     result = TracerouteResult(dest=dest)
     seq = 1
 
+    if output:
+        print(f"traceroute to {dest}, {max_hops} hops max, {packet_size} byte packets")
     while not reached and current_ttl <= max_hops:
         current_hop = Hop(current_ttl)
         for attempt in range(attempts):
@@ -81,6 +89,7 @@ def traceroute(
                         icmp_type=ICMPType.ECHO_REQUEST,
                         icmp_code=ICMPCode.CODE_0,
                         seq=seq,
+                        data=get_random_message(packet_size),
                     )
                     s.send(req)
                     res, addr, rtt = s.receive(timeout=timeout)
@@ -99,7 +108,6 @@ def traceroute(
                         and current_probe.icmp_type == ICMPType.ECHO_REPLY
                     ):
                         reached = True
-                        break
                     seq += 1
                     sleep(interval)
                 except OSError as e:
@@ -112,11 +120,6 @@ def traceroute(
                     current_hop.probes.append(Probe(addr=None, rtt=None, seq=seq))
         result.hops.append(current_hop)
         if output:
-            if current_hop.addr is None:  # all probes timed out
-                print(
-                    f"{current_ttl:2d} {' *  ':} {'  '.join('*' for _ in range(attempts))}"
-                )
-            else:
-                print(f"{current_ttl:2d} {current_hop.print_to_line()}")
+            print(f"{current_hop.to_line()}")
         current_ttl += 1
     return result
